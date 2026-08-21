@@ -1,0 +1,12 @@
+**2 · CONTEXTO**
+Los equipos de desarrollo envían pedidos por chat de forma incompleta, solicitando accesos, revisión de logs, reinicios de despliegues o ajustes de recursos.
+
+**3 · TAREA**
+Analiza el mensaje recibido a continuación. Identifica la intención principal, el entorno afectado y extrae qué información técnica clave falta para poder ejecutar el trabajo sin repreguntar.
+
+**6 · EJEMPLOS**
+Input: "Hola, ¿me das permisos para ver los logs del contenedor de pagos? Abrazo."
+Output: {"tipo_solicitud": "Acceso", "entorno": "Desconocido", "titulo_ticket": "Acceso a logs - App Pagos", "datos_faltantes": ["Entorno (dev/qa/prod)", "Nombre exacto del pod"]}
+
+MENSAJE A PROCESAR:
+[Insertar mensaje aquí]
