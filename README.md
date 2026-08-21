@@ -4,8 +4,10 @@
 
 ## 1. Especificación Clara (Las 6 piezas)
 Siguiendo la estructura de la clase, el contrato está separado en identidad estable y pedido puntual.
-* **System prompt:** Contiene la pieza **1 (Rol)**, la pieza **4 (Restricciones)** y la pieza **5 (Formato)**. Se encuentra en el archivo `system_prompt.txt`.
-* **User prompt:** Contiene la pieza **2 (Contexto)**, la pieza **3 (Tarea)** y la pieza **6 (Ejemplos)**. Se encuentra en el archivo `user_prompt.txt`.
+* **System prompt:** Contiene la pieza **1 (Rol)**, la pieza **4 (Restricciones)** y la pieza **5 (Formato)**. Se encuentra en el archivo `system_prompt.md`.
+* **User prompt:** Contiene la pieza **2 (Contexto)**, la pieza **3 (Tarea)** y la pieza **6 (Ejemplos)**. Se encuentra en el archivo `user_prompt.md`.
+
+La pieza 5 (Formato) declara explícitamente el esquema de claves (`tipo_solicitud`, `entorno`, `titulo_ticket`, `datos_faltantes`) y los valores permitidos para los dos primeros campos, en lugar de dejar que el modelo infiera el esquema únicamente a partir del ejemplo de la pieza 6. La pieza 6 incluye tres ejemplos que cubren los tres tipos de solicitud más frecuentes (Acceso, Incidente, Despliegue), en línea con la recomendación de la clase de usar dos o tres muestras de entrada→salida.
 
 ## 2. Iteraciones Documentadas
 
@@ -19,19 +21,27 @@ Siguiendo la estructura de la clase, el contrato está separado en identidad est
 * **Cambio aplicado:** Se ajustó la pieza 5 (Formato), agregando: *"El array 'datos_faltantes' debe existir siempre; si no falta nada, devuélvelo como []."*
 * **Resultado:** Output 100% predecible y estructurado.
 
+## 2.1 Hallazgo adicional (fuera del alcance de las dos iteraciones pedidas)
+Durante las pruebas surgió un tercer problema que documentamos aparte por transparencia, aunque la consigna pide dos iteraciones:
+
+* **Falla:** Al correr el contrato dos veces sin ningún mensaje para procesar, el modelo devolvió dos estructuras JSON completamente distintas entre sí (claves diferentes, valores por defecto diferentes: `null` en una corrida, `"Desconocido"` en la otra), rompiendo la repetibilidad del contrato en el caso borde de entrada vacía.
+* **Cambio aplicado:** Se agregó a la pieza 5 (Formato) la definición explícita y cerrada de las cuatro claves obligatorias, sus valores permitidos, y el output exacto a devolver cuando no hay mensaje para procesar.
+* **Resultado:** Se corrió nuevamente el caso de mensaje vacío contra el contrato corregido (en otro modelo, Gemini, para además validar portabilidad) y el output coincidió exactamente con el default definido en la pieza 5: `{"tipo_solicitud": "Desconocida", "entorno": "Desconocido", "titulo_ticket": "Esperando mensaje", "datos_faltantes": ["Mensaje original para analizar"]}`. El esquema dejó de variar entre corridas.
+
 ## 3. Output Estructurado en 3 Corridas Reales
+Las siguientes tres corridas se ejecutaron contra el contrato ya corregido por las Iteraciones 1 y 2. El detalle de cada una (input y output completo) está en su propio archivo: [`salida_1.md`](./salida_1.md), [`salida_2.md`](./salida_2.md), [`salida_3.md`](./salida_3.md).
 
-**Corrida 1**
+**Corrida 1 — Incidente**
 * **Input:** "Se cayó la base de datos de QA de nuevo, ¿pueden revisarlo urgente?"
-* **Output:** `{"tipo_solicitud": "Incidente", "entorno": "QA", "titulo_ticket": "Revisión urgente - Caída de base de datos", "datos_faltantes": []}`
+* **Output:** `{"tipo_solicitud": "Incidente", "entorno": "QA", "titulo_ticket": "Revisión por caída de base de datos - QA", "datos_faltantes": ["Nombre exacto de la base de datos", "Ubicación (clúster de Kubernetes, instancia de AWS o servidor)"]}`
 
-**Corrida 2**
+**Corrida 2 — Despliegue**
 * **Input:** "Necesitamos deployar la versión 1.4 del frontend hoy a las 20hs."
-* **Output:** `{"tipo_solicitud": "Despliegue", "entorno": "Desconocido", "titulo_ticket": "Despliegue programado - Frontend v1.4", "datos_faltantes": ["Entorno destino", "Artefacto/Job", "Plan de rollback"]}`
+* **Output:** `{"tipo_solicitud": "Despliegue", "entorno": "Desconocido", "titulo_ticket": "Despliegue versión 1.4 - Frontend", "datos_faltantes": ["Entorno (dev/qa/prod)", "Nombre exacto del pipeline, imagen o repositorio", "Ubicación de destino (clúster de Kubernetes, instancia de AWS o servidor)"]}`
 
-**Corrida 3**
+**Corrida 3 — Incidente**
 * **Input:** "El pod del microservicio de facturación está reiniciándose en loop."
-* **Output:** `{"tipo_solicitud": "Incidente", "entorno": "Desconocido", "titulo_ticket": "CrashLoopBackOff - Pod facturación", "datos_faltantes": ["Entorno", "Namespace"]}`
+* **Output:** `{"tipo_solicitud": "Incidente", "entorno": "Desconocido", "titulo_ticket": "Revisión de pod en loop de reinicios - Microservicio de facturación", "datos_faltantes": ["Entorno (dev/qa/prod)", "Nombre del clúster de Kubernetes", "Namespace y nombre exacto del pod"]}`
 
 ## 4. Reflexión
-Escribir este contrato me enseñó que la vaguedad tiene un costo altísimo. Separar el *System Prompt* del *User Prompt* es fundamental. Al definir las reglas inquebrantables de forma aislada (como forzar el formato JSON y prohibir suposiciones de entornos), el pedido diario se vuelve mucho más seguro. Comprendí que exigir un output estructurado es lo que convierte a un modelo en una pieza real de un sistema automatizado que no requiere copiar y pegar manualmente.
+Escribir este contrato me enseñó que la vaguedad tiene un costo altísimo, pero también que la especificación en sí misma puede quedar incompleta si no se prueba contra casos borde. Separar el *System Prompt* del *User Prompt* fue fundamental para aislar las reglas inquebrantables (Restricciones y Formato) del pedido variable. Sin embargo, el hallazgo más útil surgió al correr el contrato con una entrada vacía: el modelo improvisó dos esquemas JSON distintos entre corridas porque el esquema de salida solo estaba definido implícitamente en el ejemplo de la pieza 6, y ese ejemplo nunca cubría el caso de "sin mensaje". Declarar el esquema de forma explícita y cerrada en la pieza 5, en lugar de depender de que el ejemplo lo insinuara, es lo que terminó de convertir el contrato en algo repetible. Comprendí que exigir un output estructurado no alcanza si la definición de esa estructura no es exhaustiva frente a los casos que el pedido real puede no cubrir.
