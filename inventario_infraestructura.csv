@@ -1,0 +1,10 @@
+componente,entorno,cluster,namespace,pod_o_recurso
+App Pagos,prod,k8s-cluster-ar1,pagos,pagos-api-7f9c8
+App Pagos,qa,k8s-cluster-ar1,pagos-qa,pagos-api-2b1e0
+Microservicio de Facturacion,qa,k8s-cluster-ar1,facturacion,facturacion-worker-7c9d1
+Microservicio de Facturacion,prod,k8s-cluster-ar1,facturacion,facturacion-worker-3a1f4
+Frontend,dev,k8s-cluster-ar1,frontend-dev,frontend-web-9k2m1
+Frontend,prod,k8s-cluster-eu1,frontend,frontend-web-5h7n2
+Base de Datos Clientes,qa,k8s-cluster-ar1,datos,db-clientes-qa
+Base de Datos Clientes,prod,k8s-cluster-eu1,datos,db-clientes-prod
+Servicio de Notificaciones,prod,k8s-cluster-ar1,notificaciones,notif-worker-1a2b3
