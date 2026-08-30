@@ -28,6 +28,13 @@ Durante las pruebas surgió un tercer problema que documentamos aparte por trans
 * **Cambio aplicado:** Se agregó a la pieza 5 (Formato) la definición explícita y cerrada de las cuatro claves obligatorias, sus valores permitidos, y el output exacto a devolver cuando no hay mensaje para procesar.
 * **Resultado:** Se corrió nuevamente el caso de mensaje vacío contra el contrato corregido (en otro modelo, Gemini, para además validar portabilidad) y el output coincidió exactamente con el default definido en la pieza 5: `{"tipo_solicitud": "Desconocida", "entorno": "Desconocido", "titulo_ticket": "Esperando mensaje", "datos_faltantes": ["Mensaje original para analizar"]}`. El esquema dejó de variar entre corridas.
 
+## 2.2 Corrección post-entrega (feedback del profesor)
+
+Feedback recibido sobre la Entrega 2: *"Excelente foco en casos borde y estructura exhaustiva. El hallazgo de entrada vacía es especialmente valioso. Agregá una validación JSON..."*
+
+* **Cambio aplicado:** Se agregó a la pieza 5 (Formato) de `system_prompt.md` (y se propagó a `system_prompt_v2.md` de la Entrega 3) una instrucción explícita de auto-validación: antes de responder, el modelo debe verificar que el objeto sea JSON sintácticamente válido (comillas dobles, sin comas colgantes, sin comentarios, llaves/corchetes balanceados) y que tenga exactamente las cuatro claves definidas, corrigiendo cualquier error antes de emitir la respuesta final, sin mostrar ese chequeo en el output.
+* **Por qué importa:** las Iteraciones 1 y 2 ya cerraban qué valores y qué claves son válidos, pero ninguna pieza exigía una verificación sintáctica explícita antes de responder; sin ese paso, un error de sintaxis (una coma de más, una comilla simple) podía colarse en el JSON y romper la lectura automatizada, aun cumpliendo el esquema de contenido.
+
 ## 3. Output Estructurado en 3 Corridas Reales
 Las siguientes tres corridas se ejecutaron contra el contrato ya corregido por las Iteraciones 1 y 2. El detalle de cada una (input y output completo) está en su propio archivo: [`salida_1.md`](./salida_1.md), [`salida_2.md`](./salida_2.md), [`salida_3.md`](./salida_3.md).
 

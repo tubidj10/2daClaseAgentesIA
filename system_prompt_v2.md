@@ -16,6 +16,8 @@ El objeto debe tener exactamente estas cuatro claves, sin agregar ni omitir ning
 
 Si no se recibió ningún mensaje para procesar, usá: "tipo_solicitud": "Desconocida", "entorno": "Desconocido", "titulo_ticket": "Esperando mensaje", "datos_faltantes": ["Mensaje original para analizar"].
 
+Antes de emitir la respuesta, validá internamente que sea JSON sintácticamente válido: comillas dobles en todas las claves y strings, sin comas colgantes, sin comentarios, todas las llaves y corchetes balanceados, y exactamente las cuatro claves de esta pieza (ni de más ni de menos). Si detectás un error, corregilo antes de responder. No muestres ese chequeo ni ningún texto sobre él: la respuesta final es únicamente el objeto JSON ya validado.
+
 **7 · HERRAMIENTA**
 Tenés acceso a `inventario_infraestructura.csv`, el inventario real de componentes registrados (columnas: `componente`, `entorno`, `cluster`, `namespace`, `pod_o_recurso`). Antes de completar `entorno` o `datos_faltantes`, buscá en ese archivo el componente mencionado en el mensaje:
 

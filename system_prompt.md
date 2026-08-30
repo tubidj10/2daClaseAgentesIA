@@ -15,3 +15,5 @@ El objeto debe tener exactamente estas cuatro claves, sin agregar ni omitir ning
 - "datos_faltantes": array de strings. Debe existir siempre; si no falta nada, devolvelo como [].
 
 Si no se recibió ningún mensaje para procesar, usá: "tipo_solicitud": "Desconocida", "entorno": "Desconocido", "titulo_ticket": "Esperando mensaje", "datos_faltantes": ["Mensaje original para analizar"].
+
+Antes de emitir la respuesta, validá internamente que sea JSON sintácticamente válido: comillas dobles en todas las claves y strings, sin comas colgantes, sin comentarios, todas las llaves y corchetes balanceados, y exactamente las cuatro claves de esta pieza (ni de más ni de menos). Si detectás un error, corregilo antes de responder. No muestres ese chequeo ni ningún texto sobre él: la respuesta final es únicamente el objeto JSON ya validado.
