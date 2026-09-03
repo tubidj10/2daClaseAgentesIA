@@ -44,6 +44,31 @@ La primera versión del retry usaba backoff exponencial genérico (`wait_random_
 
 Las latencias reales medidas en el camino feliz (4.59s, 4.97s) están dentro del SLO. El problema es el camino con rate limit: la corrida de "Despliegue" tardó **82.8 segundos** de punta a punta por esperar un 429 real — muy por encima del SLO, aunque terminó con éxito gracias al fix del `retryDelay`. El costo financiero de un pico no está en tokens (un 429 rechazado no factura `input_tokens`/`output_tokens`), sino en la degradación de latencia/UX durante la espera, y en el costo fijo de evitarlo: pasar del free tier a un plan pago con más RPM/RPD antes de tener usuarios reales esperando una respuesta.
 
-## Supuesto de volumen (para proyectar más allá de estas 3 corridas)
+## Elección de modelo: el más chico que hace bien la tarea
 
-Con el free tier limitado a 20 requests/día para este modelo, cualquier volumen de producción real (aunque sea "bajo", como los 50/día que se habían estimado en la versión anterior de este documento) excede la cuota gratuita el primer día. La conclusión económica más importante de esta iteración no es una tabla de sensibilidad hipotética — es que **el free tier no alcanza ni para una demo con corridas reales de las 4 categorías del contrato**, y pasar a un plan pago es un prerrequisito, no una optimización.
+El criterio del curso es explícito: usar el modelo más chico que resuelve bien la tarea, no el más grande disponible. `gemini-3.5-flash` no es el modelo más barato de la familia Gemini — existe `gemini-3.5-flash-lite`, con precios varias veces menores. Antes de asumir que Flash era la elección correcta, se probó Flash-Lite contra el mismo caso real (ambigüedad qa/prod de facturación) que ya tenía una corrida documentada en Flash.
+
+**Lo que pasó, probado en vivo, dos veces con el mismo input:**
+- Primera llamada: Flash-Lite **no llamó a la herramienta** — devolvió directamente `{"entorno": "Desconocido", "datos_faltantes": ["Entorno (dev/qa/prod)", "Nombre exacto del componente o pod"]}`, la misma pregunta genérica y a ciegas que el contrato tenía *antes* de la Entrega 3 (Iteración 3). El costo fue más bajo (2913 tokens de input, 89 de output) precisamente porque se saltó el paso que le da valor al contrato.
+- Segunda llamada, mismo input exacto: Flash-Lite **sí** generó el `function_call` para `buscar_en_inventario` — inconsistente entre corridas idénticas.
+
+**Conclusión:** Flash-Lite es más barato, pero no confiable para lo que este contrato necesita — que el modelo consulte la herramienta *antes* de completar `entorno`, siempre, no a veces. `gemini-3.5-flash` sí lo hizo consistentemente en las 3 corridas automatizadas reales de este repo (`corridas/*.json`). Bajar a Flash-Lite para ahorrar reintroduciría exactamente el problema que la Entrega 3 resolvió. Esto no es una preferencia — es el resultado de una prueba real, documentada, no una suposición sobre qué modelo "debería" alcanzar.
+
+No se probó `gemini-3.5-pro` (o equivalente) porque Flash ya cumple la tarea de forma consistente y confiable en las corridas reales disponibles; subir de tier no tiene justificación sin una falla real que lo pida — el mismo criterio de "el más chico que alcanza", aplicado en la otra dirección.
+
+## Proyección semanal y anual (con el costo real medido, no estimado)
+
+Costo real promedio por corrida, medido en las 3 corridas automatizadas de `corridas/`: ($0.0110 + $0.0084 + $0.0099) / 3 ≈ **$0.0098/corrida**.
+
+Supuesto de volumen declarado (no medido — es la escala razonable para un equipo de IT chico usando esto como triage de pedidos por chat): 30 solicitudes/día hábil.
+
+| Período | Solicitudes | Costo estimado (a $0.0098/corrida real) |
+|---|---:|---:|
+| Semanal (5 días hábiles) | 150 | **≈ $1.47** |
+| Anual (260 días hábiles) | 7.800 | **≈ $76.44** |
+
+Es un sistema barato de operar a esta escala — el costo real medido (con thinking incluido) sigue siendo órdenes de magnitud menor que el tiempo de un SRE humano respondiendo estos mismos mensajes uno por uno. El obstáculo real no es el costo por corrida: es que el **free tier** (usado para todas las corridas de este repo) no soporta ni por asomo este volumen — hace falta un plan pago con más RPM/RPD antes de operar a 30/día real, aunque el costo en dólares sea bajo (ver el hallazgo #2 más abajo).
+
+## Supuesto de volumen — límite real del free tier
+
+Con el free tier limitado a 20 requests/día para este modelo, cualquier volumen de producción real (incluida la proyección de 30/día de arriba) excede la cuota gratuita el primer día. La conclusión económica más importante de esta iteración no es la tabla de sensibilidad — es que **el free tier no alcanza ni para una demo con corridas reales de las 4 categorías del contrato**, y pasar a un plan pago es un prerrequisito, no una optimización.
