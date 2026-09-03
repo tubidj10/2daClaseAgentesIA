@@ -87,7 +87,7 @@ Feedback recibido: *"El contrato solicita JSON pero no restringe todas las categ
 - **Motivación:** el criterio del curso para elegir modelo es "el más chico que hace bien la tarea", y hasta esta iteración `gemini-3.5-flash` se usó porque era la key disponible (Iteración 7), no porque se hubiera comprobado que es el más chico adecuado.
 - **Prueba real:** se corrió el mismo caso de ambigüedad qa/prod (facturación) contra `gemini-3.5-flash-lite`, el tier inmediato inferior en precio. Resultado: en una de dos llamadas idénticas, el modelo **no llamó a la herramienta** y devolvió `entorno: "Desconocido"` con una pregunta genérica — el mismo comportamiento que el contrato tenía antes de la Entrega 3. En la otra llamada sí la usó. Inconsistente, no confiable.
 - **Decisión:** se mantiene `gemini-3.5-flash`, que sí usó la herramienta de forma consistente en las 3 corridas automatizadas reales de este repo. Detalle completo en `COSTOS.md`, sección "Elección de modelo: el más chico que hace bien la tarea".
-- **Commit:** ver el commit que agrega esta iteración junto con las secciones nuevas de `COSTOS.md` y `GOBERNANZA.md`.
+- **Commit:** [`ef0a28d`](https://github.com/tubidj10/2daClaseAgentesIA/commit/ef0a28dc7cb4938ae0280a336bfcb4d8f4926c1a).
 
 ## Tabla de trazabilidad: commit ↔ métrica diferencial
 
@@ -99,7 +99,7 @@ Vínculo explícito entre cada iteración con datos medibles y su commit exacto 
 | 6 (comando único) | [`c37085a`](https://github.com/tubidj10/2daClaseAgentesIA/commit/c37085a8b2aeb48f4e3cd3a1c465e7e5a912ecde) | N/A — cambio de tooling, no de comportamiento del modelo. |
 | 7 (migración a Gemini + fix de thinking tokens) | [`1d3d5c1`](https://github.com/tubidj10/2daClaseAgentesIA/commit/1d3d5c1c5d0a86a745f2d76c33f45c0191d65593) | Antes del fix de `thoughts_token_count`: `tokens_output` reportado = solo texto visible (ej. ~90-190 tokens). Después: `tokens_output` real = texto + thinking (194→**453**, 163→**435** en las mismas dos corridas, medido en `corridas/*.json`). |
 | 8 (enums cerrados + retry consciente de `retryDelay`) | [`7921573`](https://github.com/tubidj10/2daClaseAgentesIA/commit/79215731a2d02916726c210e768aaf879c4f9b6a) | Antes del fix de retry: 5/5 intentos fallidos contra un 429 real, 0 corridas exitosas en esa ventana. Después: la corrida de "Despliegue" (`corrida_20260903T182003.json`) esperó el `retryDelay` real (**82.8s** de latencia total) y terminó con éxito — de 0% a 100% de corridas exitosas ante el mismo tipo de error. |
-| 9 (elección de modelo) | ver commit de esta misma sección | `gemini-3.5-flash-lite`: tool-call detectado en 1 de 2 llamadas idénticas (50% de consistencia). `gemini-3.5-flash`: tool-call detectado en 3 de 3 corridas automatizadas reales (100%). |
+| 9 (elección de modelo) | [`ef0a28d`](https://github.com/tubidj10/2daClaseAgentesIA/commit/ef0a28dc7cb4938ae0280a336bfcb4d8f4926c1a) | `gemini-3.5-flash-lite`: tool-call detectado en 1 de 2 llamadas idénticas (50% de consistencia). `gemini-3.5-flash`: tool-call detectado en 3 de 3 corridas automatizadas reales (100%). |
 
 ## Nota sobre métricas diferenciales (tokens/latencia)
 
