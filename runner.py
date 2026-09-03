@@ -18,6 +18,7 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Literal
 
 from dotenv import load_dotenv
 from google import genai
@@ -36,9 +37,15 @@ THINKING_BUDGET = 512          # guard: un ticket de 4 claves no necesita razona
 MAX_TOOL_RESULT_CHARS = 4000   # guard: nunca inyectar un resultado de herramienta sin límite
 
 
+# Enums cerrados, calcados de la pieza 5 (Formato) del contrato — no valores
+# libres. Pydantic rechaza cualquier valor fuera de este set con ValidationError.
+TipoSolicitud = Literal["Acceso", "Incidente", "Despliegue", "Ajuste de recursos", "Desconocida"]
+Entorno = Literal["dev", "qa", "prod", "Desconocido"]
+
+
 class TicketSchema(BaseModel):
-    tipo_solicitud: str
-    entorno: str
+    tipo_solicitud: TipoSolicitud
+    entorno: Entorno
     titulo_ticket: str
     datos_faltantes: list[str]
 
@@ -79,10 +86,39 @@ def _es_reintentable(exc: BaseException) -> bool:
     return isinstance(exc, genai_errors.APIError) and exc.code in (429, 500, 503)
 
 
+def _retry_delay_del_servidor(exc: BaseException) -> float | None:
+    """Lee el RetryInfo.retryDelay real que Gemini devuelve en un 429/503.
+
+    Encontrado corriendo el runner de verdad: reintentar con backoff genérico
+    contra una cuota agotada es contraproducente — cada intento es otra
+    request contra la misma cuota, y el backoff exponencial (tope 30s) nunca
+    llega a esperar los ~45-60s que el propio servidor pide. Respetar el
+    retryDelay real es la corrección (ver DECISIONES.md, Iteración 8).
+    """
+    if not isinstance(exc, genai_errors.APIError) or not isinstance(exc.details, dict):
+        return None
+    detalles = exc.details.get("error", {}).get("details", [])
+    for d in detalles:
+        if isinstance(d, dict) and str(d.get("@type", "")).endswith("RetryInfo"):
+            try:
+                return float(str(d["retryDelay"]).rstrip("s"))
+            except (KeyError, ValueError):
+                return None
+    return None
+
+
+def _esperar_ante_reintento(retry_state) -> float:
+    exc = retry_state.outcome.exception() if retry_state.outcome else None
+    delay = _retry_delay_del_servidor(exc) if exc else None
+    if delay is not None:
+        return delay
+    return wait_random_exponential(multiplier=1, max=30)(retry_state)
+
+
 @retry(
     retry=retry_if_exception(_es_reintentable),
     stop=stop_after_attempt(5),
-    wait=wait_random_exponential(multiplier=1, max=30),
+    wait=_esperar_ante_reintento,
     reraise=True,
 )
 def llamar_modelo(client: genai.Client, **kwargs):

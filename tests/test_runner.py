@@ -10,7 +10,9 @@ import pytest
 from pydantic import ValidationError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from runner import TicketSchema, buscar_en_inventario  # noqa: E402
+from google.genai import errors as genai_errors  # noqa: E402
+
+from runner import TicketSchema, _retry_delay_del_servidor, buscar_en_inventario  # noqa: E402
 
 
 def test_inventario_coincidencia_unica():
@@ -56,3 +58,53 @@ def test_schema_rechaza_clave_faltante():
                 # falta datos_faltantes
             }
         )
+
+
+def test_schema_rechaza_tipo_solicitud_fuera_del_enum():
+    with pytest.raises(ValidationError):
+        TicketSchema.model_validate(
+            {
+                "tipo_solicitud": "Otra cosa que el modelo se inventó",
+                "entorno": "qa",
+                "titulo_ticket": "Revisión - Facturación",
+                "datos_faltantes": [],
+            }
+        )
+
+
+def test_schema_rechaza_entorno_fuera_del_enum():
+    with pytest.raises(ValidationError):
+        TicketSchema.model_validate(
+            {
+                "tipo_solicitud": "Incidente",
+                "entorno": "produccion",  # no es uno de los 4 valores exactos
+                "titulo_ticket": "Revisión - Facturación",
+                "datos_faltantes": [],
+            }
+        )
+
+
+def test_retry_delay_lee_el_valor_real_del_error_429():
+    # Payload real de un 429 RESOURCE_EXHAUSTED de Gemini (recortado), tal
+    # como se recibió corriendo el runner contra la cuota free-tier.
+    response_json = {
+        "error": {
+            "code": 429,
+            "message": "You exceeded your current quota...",
+            "status": "RESOURCE_EXHAUSTED",
+            "details": [
+                {"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": "47s"}
+            ],
+        }
+    }
+    exc = genai_errors.ClientError(429, response_json)
+    assert _retry_delay_del_servidor(exc) == 47.0
+
+
+def test_retry_delay_none_si_no_hay_retry_info():
+    exc = genai_errors.ClientError(500, {"error": {"code": 500, "message": "oops"}})
+    assert _retry_delay_del_servidor(exc) is None
+
+
+def test_retry_delay_none_para_excepciones_no_apierror():
+    assert _retry_delay_del_servidor(ValueError("no es un error de la API")) is None

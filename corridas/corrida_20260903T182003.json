@@ -1,0 +1,17 @@
+{
+  "timestamp": "2026-09-03T18:20:03.010494+00:00",
+  "modelo": "gemini-3.5-flash",
+  "mensaje_usuario": "Necesitamos deployar la versión 1.4 del frontend hoy a las 20hs.",
+  "output": {
+    "tipo_solicitud": "Despliegue",
+    "entorno": "Desconocido",
+    "titulo_ticket": "Despliegue versión 1.4 - Frontend",
+    "datos_faltantes": [
+      "Confirmar el entorno y recurso de destino. Opciones disponibles: dev (cluster: k8s-cluster-ar1, namespace: frontend-dev, pod: frontend-web-9k2m1) o prod (cluster: k8s-cluster-eu1, namespace: frontend, pod: frontend-web-5h7n2)",
+      "Nombre exacto del pipeline, imagen o repositorio"
+    ]
+  },
+  "tokens_input": 3009,
+  "tokens_output": 598,
+  "latencia_segundos": 82.817
+}

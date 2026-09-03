@@ -21,7 +21,7 @@
 ## Salvaguardas Human-in-the-Loop
 
 - Cada corrida automatizada queda guardada como un archivo individual en `corridas/`, nunca se sobreescribe ni se autoaplica: un humano revisa el JSON antes de cargarlo a cualquier sistema de tickets real.
-- El schema de salida (`output_config.format` en `runner.py`) es forzado por la API, no solo pedido por prompt: una salida que no cierre el esquema no puede llegar a `corridas/` como si fuera válida (ver `DECISIONES.md`, Iteración 5).
+- El schema de salida se valida con Pydantic (`TicketSchema` en `runner.py`) apenas el modelo devuelve la respuesta final, con enums cerrados en `tipo_solicitud` y `entorno`: una salida que no cierre el esquema exacto no puede llegar a `corridas/` como si fuera válida (ver `DECISIONES.md`, Iteraciones 5 y 8).
 - Los reintentos ante 429/5xx tienen un tope (`stop_after_attempt(5)`), así que un fallo persistente del proveedor termina en un error explícito para el humano, no en un loop infinito silencioso.
 
 ## Quién firma

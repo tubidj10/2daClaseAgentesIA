@@ -20,27 +20,30 @@ Gemini 3.5 Flash es un modelo con razonamiento interno ("thinking"). La API repo
 |---|---:|---:|---:|---:|
 | Incidente (facturación, ambigüedad qa/prod) | 4595 | 453 | 4.59s | $0.0069 + $0.0041 = **$0.0110** |
 | Acceso (pagos, ambigüedad prod/qa) | 3014 | 435 | 4.97s | $0.0045 + $0.0039 = **$0.0084** |
+| Despliegue (frontend, ambigüedad dev/prod) | 3009 | 598 | **82.82s** (incluye espera real de un 429, ver más abajo) | $0.0045 + $0.0054 = **$0.0099** |
 
-(Costo = input×$1.50/MTok + output×$9.00/MTok. Solo hay 2 corridas automatizadas reales — la cuota gratuita de Gemini se agotó antes de poder generar las de "Despliegue" y mensaje vacío; ver el hallazgo #2 más abajo y `corridas/README.md`.)
+(Costo = input×$1.50/MTok + output×$9.00/MTok. Hay 3 corridas automatizadas reales — la cuota gratuita de Gemini se agotó antes de poder generar la de mensaje vacío; ver el hallazgo #2 más abajo y `corridas/README.md`.)
 
 **Un ticket real cuesta ~$0.008–0.011**, no los ~$0.001–0.002 que hubiera sugerido una estimación que ignorara el thinking. Es la diferencia entre un supuesto razonable y una medición real — exactamente el tipo de error que este ejercicio buscaba encontrar.
 
 ## Guard aplicado: `thinking_budget`
 
-Con `max_output_tokens=1024` y sin límite de thinking, una corrida real (`corrida-manual-4`, la de "Despliegue") devolvió un JSON truncado (`JSONDecodeError: Unterminated string`) porque el thinking consumió casi todo el presupuesto de tokens, sin dejar espacio para el ticket. Se corrigió fijando `thinking_config.thinking_budget=512` y subiendo `max_output_tokens=1536` — un guard de tokens real, encontrado por una falla real, no una precaución teórica (ver `DECISIONES.md`, Iteración 7).
+Con `max_output_tokens=1024` y sin límite de thinking, una corrida real contra el runner devolvió un JSON truncado (`JSONDecodeError: Unterminated string`) porque el thinking consumió casi todo el presupuesto de tokens, sin dejar espacio para el ticket. Se corrigió fijando `thinking_config.thinking_budget=512` y subiendo `max_output_tokens=1536` — un guard de tokens real, encontrado por una falla real, no una precaución teórica (ver `DECISIONES.md`, Iteración 7).
 
-## Hallazgo real #2: rate limit del free tier (429 real)
+## Hallazgo real #2: rate limit del free tier (429 real), y por qué el backoff genérico no alcanza
 
-Al generar las corridas de esta entrega, el runner recibió un `429 RESOURCE_EXHAUSTED` real de Gemini: *"Quota exceeded... limit: 20, model: gemini-3.5-flash... Please retry in ~45s"*. Es el límite del tier gratuito (no un pico de tráfico simulado). El reintento con backoff de `tenacity` hizo exactamente lo esperado: reintentó, agotó los 5 intentos dentro de la ventana de backoff (`wait_random_exponential(max=30)`), y terminó devolviendo el error al usuario en vez de colgarse indefinidamente — visible como una excepción clara en la terminal, no un cuelgue silencioso. Esperando ~45-60 segundos reales (la ventana de la cuota), el siguiente intento funcionó.
+Al generar las corridas de esta entrega, el runner recibió varios `429 RESOURCE_EXHAUSTED` reales de Gemini: *"Quota exceeded... limit: 20, model: gemini-3.5-flash... Please retry in ~3-60s"* (el delay pedido por el servidor fluctuó entre intentos, no fue un valor fijo). Es el límite del tier gratuito (no un pico de tráfico simulado).
 
-**Esto confirma en la práctica lo que la sección de SLO de más abajo predecía en teoría:** el backoff exponencial absorbe *ráfagas cortas*, pero no puede resolver una cuota realmente agotada — ahí la única mitigación real es tiempo de espera o un tier pago con más cupo, no más reintentos.
+La primera versión del retry usaba backoff exponencial genérico (`wait_random_exponential(max=30)`): agotaba los 5 intentos sin nunca esperar los ~45-60s reales que el servidor pedía, y cada intento fallido era en sí mismo otra request contra la misma cuota — es decir, **reintentar a ciegas empeoraba la situación en vez de ayudar**. Se corrigió leyendo el `RetryInfo.retryDelay` real del cuerpo del error 429/503 y usándolo como tiempo de espera (`_retry_delay_del_servidor` en `runner.py`, con fallback a backoff exponencial si el servidor no lo informa).
+
+**Resultado medido:** la corrida de "Despliegue" (arriba) esperó el delay real del servidor y tardó **82.8 segundos** en total, pero terminó con éxito — contra los 5 intentos fallidos y ~150s desperdiciados de las corridas anteriores a este fix. Es una mejora real de resiliencia, verificada contra la API, no una suposición sobre cómo "debería" comportarse un backoff.
 
 ## Picos de carga y SLO
 
 **SLO objetivo declarado:** p95 de latencia de una respuesta del agente < 8 segundos.
 
-Las latencias reales medidas (4.59s, 4.97s) están dentro del SLO en el camino feliz. El problema es el camino con rate limit: un 429 real forzó una espera de ~45-60 segundos antes de poder reintentar con éxito — muy por encima del SLO. El costo financiero de un pico no está en tokens (un 429 rechazado no factura `input_tokens`/`output_tokens`), sino en la degradación de latencia/UX durante la espera, y en el costo fijo de evitarlo: pasar del free tier a un plan pago con más RPM/RPD antes de tener usuarios reales esperando una respuesta.
+Las latencias reales medidas en el camino feliz (4.59s, 4.97s) están dentro del SLO. El problema es el camino con rate limit: la corrida de "Despliegue" tardó **82.8 segundos** de punta a punta por esperar un 429 real — muy por encima del SLO, aunque terminó con éxito gracias al fix del `retryDelay`. El costo financiero de un pico no está en tokens (un 429 rechazado no factura `input_tokens`/`output_tokens`), sino en la degradación de latencia/UX durante la espera, y en el costo fijo de evitarlo: pasar del free tier a un plan pago con más RPM/RPD antes de tener usuarios reales esperando una respuesta.
 
-## Supuesto de volumen (para proyectar más allá de estas 4 corridas)
+## Supuesto de volumen (para proyectar más allá de estas 3 corridas)
 
 Con el free tier limitado a 20 requests/día para este modelo, cualquier volumen de producción real (aunque sea "bajo", como los 50/día que se habían estimado en la versión anterior de este documento) excede la cuota gratuita el primer día. La conclusión económica más importante de esta iteración no es una tabla de sensibilidad hipotética — es que **el free tier no alcanza ni para una demo con corridas reales de las 4 categorías del contrato**, y pasar a un plan pago es un prerrequisito, no una optimización.

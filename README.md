@@ -31,7 +31,7 @@ Después, un solo comando instala dependencias y corre el runner:
 ./run.sh "El pod del microservicio de facturación está reiniciándose en loop."
 ```
 
-El resultado se imprime en pantalla y queda guardado en `corridas/corrida_<timestamp>.json` con tokens y latencia reales. Ya hay 2 corridas automatizadas reales en `corridas/` — las otras 2 categorías del contrato quedaron pendientes porque se agotó la cuota gratuita de Gemini (20 requests/día) generándolas; ver `corridas/README.md`.
+El resultado se imprime en pantalla y queda guardado en `corridas/corrida_<timestamp>.json` con tokens y latencia reales. Ya hay 3 corridas automatizadas reales en `corridas/` (más 7 corridas manuales que cubren camino feliz, ambigüedad y casos sin match en el inventario) — la cuarta categoría quedó pendiente porque se agotó la cuota gratuita de Gemini generándolas; ver `corridas/README.md`.
 
 **Nota:** el runner usa **Gemini**, no Claude — es la API key real disponible al momento de esta entrega (ver `DECISIONES.md`, Iteración 7). El resto del contrato (prompts, gobernanza) es agnóstico al proveedor; `COSTOS.md` está recalculado con precios de Gemini.
 
