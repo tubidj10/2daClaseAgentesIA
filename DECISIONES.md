@@ -7,34 +7,34 @@ Historial de las fallas reales encontradas al probar el contrato, el cambio apli
 - **Falla:** al recibir pedidos sin entorno especificado, el modelo asumía que era "Producción", lo cual es un riesgo crítico.
 - **Cambio aplicado:** se agregó a la pieza 4 (Restricciones): *"Prohibido asumir que el entorno es 'Producción' salvo que el usuario lo indique textualmente."*
 - **Resultado:** el agente empezó a clasificar los entornos no mencionados como "Desconocido" y a exigir el dato.
-- **Commit:** incluida en `832a728` (versión base de la Entrega 2, ya con las iteraciones 1 y 2 aplicadas).
+- **Commit:** incluida en [`832a7289c382d55b4f3179048e1e3ef72947d9c8`](https://github.com/tubidj10/2daClaseAgentesIA/commit/832a7289c382d55b4f3179048e1e3ef72947d9c8) (versión base de la Entrega 2, ya con las iteraciones 1 y 2 aplicadas).
 
 ## Iteración 2 — Consistencia del esquema JSON
 
 - **Falla:** en pedidos completos, el modelo omitía la clave `datos_faltantes` del JSON, rompiendo la estructura esperada para lectura automatizada.
 - **Cambio aplicado:** se ajustó la pieza 5 (Formato): *"El array 'datos_faltantes' debe existir siempre; si no falta nada, devuélvelo como []."*
 - **Resultado:** output 100% predecible y estructurado.
-- **Commit:** `832a728`.
+- **Commit:** [`832a7289c382d55b4f3179048e1e3ef72947d9c8`](https://github.com/tubidj10/2daClaseAgentesIA/commit/832a7289c382d55b4f3179048e1e3ef72947d9c8).
 
 ## Iteración 2.1 — Hallazgo de entrada vacía
 
 - **Falla:** al correr el contrato dos veces sin ningún mensaje para procesar, el modelo devolvió dos estructuras JSON completamente distintas entre sí (claves diferentes, valores por defecto diferentes), rompiendo la repetibilidad en el caso borde de entrada vacía.
 - **Cambio aplicado:** se agregó a la pieza 5 la definición explícita y cerrada de las cuatro claves obligatorias, sus valores permitidos, y el output exacto a devolver cuando no hay mensaje para procesar.
 - **Resultado:** se corrió nuevamente el caso de mensaje vacío contra el contrato corregido (en otro modelo, Gemini, para validar portabilidad) y el output coincidió exactamente con el default definido en la pieza 5.
-- **Commit:** `832a728`.
+- **Commit:** [`832a7289c382d55b4f3179048e1e3ef72947d9c8`](https://github.com/tubidj10/2daClaseAgentesIA/commit/832a7289c382d55b4f3179048e1e3ef72947d9c8).
 
 ## Iteración 3 — Herramienta real (Entrega 3)
 
 - **Motivación:** el contrato solo procesaba texto que un humano le pegaba; no tenía forma de verificar nada contra la realidad.
 - **Cambio aplicado:** se agregó la pieza 7 (Herramienta): consultar `inventario_infraestructura.csv` (inventario real de componentes) antes de completar `entorno` y `datos_faltantes`.
 - **Resultado:** corrida real documentada en `corridas/corrida-manual-4-entrega3-herramienta.md`. El caso de prueba (componente "Facturación") reveló una ambigüedad real — existe en `qa` y en `prod` — y el contrato la manejó bien: no asumió un entorno, pero reemplazó 3 preguntas genéricas por 1 pregunta puntual con las dos opciones reales.
-- **Commit:** `0040ee4`.
+- **Commit:** [`0040ee4f115418aaad9e611c1ce90c2acb7ad656`](https://github.com/tubidj10/2daClaseAgentesIA/commit/0040ee4f115418aaad9e611c1ce90c2acb7ad656).
 
 ## Iteración 4 — Validación JSON (corrección post-entrega del profesor)
 
 - **Feedback recibido:** *"Excelente foco en casos borde y estructura exhaustiva. El hallazgo de entrada vacía es especialmente valioso. Agregá una validación JSON..."*
 - **Cambio aplicado:** se agregó a la pieza 5 una instrucción explícita de auto-validación sintáctica antes de responder (comillas dobles, sin comas colgantes, llaves balanceadas, exactamente las cuatro claves).
-- **Commit:** `5d247c9`.
+- **Commit:** [`5d247c980d9fa38ea865524f2006121fff9ae0cc`](https://github.com/tubidj10/2daClaseAgentesIA/commit/5d247c980d9fa38ea865524f2006121fff9ae0cc).
 
 ## Iteración 5 — Schema forzado a nivel de protocolo, gobernanza y reproducibilidad
 
@@ -48,7 +48,16 @@ Historial de las fallas reales encontradas al probar el contrato, el cambio apli
   - Gobernanza y alcance documentados en `GOBERNANZA.md` (matriz L0-L4, alcance negativo, salvaguardas humanas).
   - Análisis económico con precios reales de Claude Sonnet 5 en `COSTOS.md`.
   - Tests automatizados (`tests/test_runner.py`, `pytest`) sobre la lógica que no depende de la API: búsqueda en inventario y validación de schema.
-- **Commit:** este mismo commit (ver `git log -- runner.py GOBERNANZA.md COSTOS.md` para el hash exacto).
+- **Commit:** [`c1274356acdbd7c303c928161aa5a39b0b26663b`](https://github.com/tubidj10/2daClaseAgentesIA/commit/c1274356acdbd7c303c928161aa5a39b0b26663b).
+
+## Iteración 6 — Trazabilidad de commits y comando único de ejecución
+
+- **Motivación:** cerrar los dos últimos puntos señalados por la auditoría automática: (a) los commits de `DECISIONES.md` estaban abreviados (7 caracteres) en vez del hash completo; (b) faltaba un comando único que instale, configure y corra el runner sin pasos manuales dispersos por el README.
+- **Cambio aplicado:**
+  - Se reemplazaron todos los hashes abreviados de este archivo por el SHA completo de 40 caracteres, enlazado al commit real en GitHub.
+  - Se agregó `run.sh`, que encadena `pip install -r requirements.txt` y `python runner.py "$1"` en un solo comando (`./run.sh "mensaje"`).
+- **Límite honesto que no se puede automatizar:** el único paso manual que queda es completar `ANTHROPIC_API_KEY` en `.env` la primera vez. Eso no es una falla de reproducibilidad — es una credencial secreta que, por diseño, nunca puede ni debe quedar en un comando o script versionado (ver `GOBERNANZA.md` e `Higiene de Secretos` en el informe forense). Automatizarlo significaría hardcodear una API key en el repo, exactamente lo que la propia auditoría marca como riesgo si lo encontrara.
+- **Commit:** ver `git log -- DECISIONES.md run.sh` para el hash de este cambio puntual.
 
 ## Nota sobre métricas diferenciales (tokens/latencia)
 

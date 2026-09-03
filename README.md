@@ -10,6 +10,7 @@ Agente de triage: convierte pedidos informales de desarrolladores en tickets est
 | `prompts/user_prompt.md` | Contexto, tarea y ejemplos few-shot — piezas 2, 3, 6. Incluye la cláusula anti-inyección sobre el mensaje del usuario. |
 | `inventario_infraestructura.csv` | La herramienta: inventario real de componentes (`componente, entorno, cluster, namespace, pod_o_recurso`) que el agente consulta antes de completar `entorno`/`datos_faltantes`. |
 | `runner.py` | Runner en Python: llama a la API de Anthropic con tool-calling real, fuerza el schema de salida a nivel de protocolo, reintenta ante 429/5xx con backoff+jitter, y guarda cada corrida en `corridas/`. |
+| `run.sh` | Comando único de ejecución: instala dependencias y corre `runner.py`. |
 | `tests/test_runner.py` | Tests con `pytest` de la lógica que no depende de la API (búsqueda en inventario, validación de schema). |
 | `corridas/` | Corridas reales — manuales (chat) y automatizadas (`runner.py`). Ver `corridas/README.md`. |
 | `DECISIONES.md` | Historial de fallas encontradas, cambios aplicados y el commit exacto de cada iteración. |
@@ -18,10 +19,16 @@ Agente de triage: convierte pedidos informales de desarrolladores en tickets est
 
 ## Cómo correr una corrida real
 
+Una sola vez (es una credencial secreta, no se automatiza — ver `DECISIONES.md`, Iteración 6):
+
 ```bash
-pip install -r requirements.txt
 cp .env.example .env   # completar ANTHROPIC_API_KEY
-python runner.py "El pod del microservicio de facturación está reiniciándose en loop."
+```
+
+Después, un solo comando instala dependencias y corre el runner:
+
+```bash
+./run.sh "El pod del microservicio de facturación está reiniciándose en loop."
 ```
 
 El resultado se imprime en pantalla y queda guardado en `corridas/corrida_<timestamp>.json` con tokens y latencia reales.
