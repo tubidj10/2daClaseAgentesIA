@@ -1,0 +1,16 @@
+{
+  "timestamp": "2026-09-03T18:03:53.216663+00:00",
+  "modelo": "gemini-3.5-flash",
+  "mensaje_usuario": "El pod del microservicio de facturación está reiniciándose en loop.",
+  "output": {
+    "tipo_solicitud": "Incidente",
+    "entorno": "Desconocido",
+    "titulo_ticket": "Incidente - Microservicio de Facturación en loop de reinicio",
+    "datos_faltantes": [
+      "Por favor, indicar el entorno afectado seleccionando una de las siguientes opciones encontradas: [qa, cluster: k8s-cluster-ar1, namespace: facturacion, pod: facturacion-worker-7c9d1] o [prod, cluster: k8s-cluster-ar1, namespace: facturacion, pod: facturacion-worker-3a1f4]"
+    ]
+  },
+  "tokens_input": 4595,
+  "tokens_output": 453,
+  "latencia_segundos": 4.587
+}

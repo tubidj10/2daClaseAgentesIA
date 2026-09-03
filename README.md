@@ -9,20 +9,20 @@ Agente de triage: convierte pedidos informales de desarrolladores en tickets est
 | `prompts/system_prompt.md` | Rol, restricciones, formato (schema + auto-validación) y la herramienta — piezas 1, 4, 5, 7 del contrato. |
 | `prompts/user_prompt.md` | Contexto, tarea y ejemplos few-shot — piezas 2, 3, 6. Incluye la cláusula anti-inyección sobre el mensaje del usuario. |
 | `inventario_infraestructura.csv` | La herramienta: inventario real de componentes (`componente, entorno, cluster, namespace, pod_o_recurso`) que el agente consulta antes de completar `entorno`/`datos_faltantes`. |
-| `runner.py` | Runner en Python: llama a la API de Anthropic con tool-calling real, fuerza el schema de salida a nivel de protocolo, reintenta ante 429/5xx con backoff+jitter, y guarda cada corrida en `corridas/`. |
+| `runner.py` | Runner en Python: llama a la API de Gemini con tool-calling real, valida el schema de salida con Pydantic, reintenta ante 429/5xx con backoff+jitter, y guarda cada corrida en `corridas/`. |
 | `run.sh` | Comando único de ejecución: instala dependencias y corre `runner.py`. |
 | `tests/test_runner.py` | Tests con `pytest` de la lógica que no depende de la API (búsqueda en inventario, validación de schema). |
 | `corridas/` | Corridas reales — manuales (chat) y automatizadas (`runner.py`). Ver `corridas/README.md`. |
 | `DECISIONES.md` | Historial de fallas encontradas, cambios aplicados y el commit exacto de cada iteración. |
 | `GOBERNANZA.md` | Matriz de autonomía L0–L4, alcance negativo y salvaguardas human-in-the-loop. |
-| `COSTOS.md` | Análisis económico con precios reales de Claude Sonnet 5, sensibilidad de Prompt Caching y el impacto de picos de carga sobre el SLO. |
+| `COSTOS.md` | Análisis económico con precios de Gemini 3.5 Flash, sensibilidad de context caching y el impacto de picos de carga sobre el SLO. |
 
 ## Cómo correr una corrida real
 
 Una sola vez (es una credencial secreta, no se automatiza — ver `DECISIONES.md`, Iteración 6):
 
 ```bash
-cp .env.example .env   # completar ANTHROPIC_API_KEY
+cp .env.example .env   # completar GEMINI_API_KEY
 ```
 
 Después, un solo comando instala dependencias y corre el runner:
@@ -31,7 +31,9 @@ Después, un solo comando instala dependencias y corre el runner:
 ./run.sh "El pod del microservicio de facturación está reiniciándose en loop."
 ```
 
-El resultado se imprime en pantalla y queda guardado en `corridas/corrida_<timestamp>.json` con tokens y latencia reales.
+El resultado se imprime en pantalla y queda guardado en `corridas/corrida_<timestamp>.json` con tokens y latencia reales. Ya hay 2 corridas automatizadas reales en `corridas/` — las otras 2 categorías del contrato quedaron pendientes porque se agotó la cuota gratuita de Gemini (20 requests/día) generándolas; ver `corridas/README.md`.
+
+**Nota:** el runner usa **Gemini**, no Claude — es la API key real disponible al momento de esta entrega (ver `DECISIONES.md`, Iteración 7). El resto del contrato (prompts, gobernanza) es agnóstico al proveedor; `COSTOS.md` está recalculado con precios de Gemini.
 
 Para correr los tests (no requieren API key):
 

@@ -1,51 +1,46 @@
 # Análisis Económico
 
-Precios reales de Claude Sonnet 5 (modelo configurado en `runner.py` vía `CLAUDE_MODEL`), API directa de Anthropic, vigentes al momento de esta entrega:
+Runner corriendo contra **Gemini 3.5 Flash** (modelo configurado en `runner.py` vía `GEMINI_MODEL`) — ver `DECISIONES.md`, Iteración 7, sobre por qué el proveedor es Gemini y no Claude como el resto de la materia.
 
-| Concepto | Precio |
+**Advertencia de fuente:** desde este entorno de red, `ai.google.dev` (la página oficial de precios de Google) está bloqueada — no pude verificar los precios contra la fuente primaria. Los números de abajo vienen de una búsqueda web (agregadores de pricing de terceros, coincidentes entre sí) y **no están confirmados contra la página oficial de Google**. Todo lo demás en esta sección sí es medición real: tokens y latencia de las 4 corridas en `corridas/`.
+
+| Concepto | Precio (según fuentes de terceros, no verificado con Google) |
 |---|---:|
-| Input | $2.00 / MTok |
-| Output | $10.00 / MTok |
-| Cache read (~0.1× del input) | $0.20 / MTok |
-| Cache write, TTL 5 min (1.25× del input) | $2.50 / MTok |
-| Cache write, TTL 1 h (2× del input) | $4.00 / MTok |
+| Input | $1.50 / MTok |
+| Output (incluye thinking tokens, ver más abajo) | $9.00 / MTok |
+| Cache read, context caching explícito (Gemini 2.5+) | ~90% de descuento sobre el input |
 
-No se midieron estos costos contra tráfico real (no hay `ANTHROPIC_API_KEY` disponible aún — ver `DECISIONES.md`), así que todo lo que sigue son estimaciones declaradas a partir del tamaño real de los prompts, no mediciones de `usage` real.
+## Hallazgo real #1: los "thinking tokens" se facturan como output pero se reportan aparte
 
-## Supuestos de volumen
+Gemini 3.5 Flash es un modelo con razonamiento interno ("thinking"). La API reporta esos tokens en un campo separado (`thoughts_token_count`), distinto de `candidates_token_count` (el texto visible) — pero **se facturan al precio de output**. La primera versión de `runner.py` solo sumaba `candidates_token_count`, subestimando el costo real. Se corrigió sumando ambos (`tokens_output = candidates_token_count + thoughts_token_count`) — ver `DECISIONES.md`, Iteración 7. Sin este fix, el costo reportado en cada corrida hubiera sido incorrecto por un margen grande: en la corrida de "Incidente" (`corridas/corrida_20260903T180353.json`), el output visible fue de apenas un ticket JSON de ~90 tokens, pero `tokens_output` real (con thinking incluido) fue **453** — el thinking es la mayoría del costo de output en este contrato.
 
-- **Prompt fijo (system + user template + definición de la herramienta + schema de salida):** `prompts/system_prompt.md` + `prompts/user_prompt.md` miden 733 palabras en total; con un factor aproximado de 1.3-1.4 tokens/palabra en español, más ~150 tokens de la definición de la herramienta y el JSON Schema de salida, el prefijo fijo **F ≈ 1150 tokens** — por encima del mínimo cacheable de Sonnet 5 (1024 tokens), así que sí puede cachearse.
-- **Mensaje variable del usuario:** un pedido informal de chat, **V ≈ 50 tokens** en promedio. Nunca es cacheable (cambia en cada request).
-- **Output:** un ticket JSON corto (4 claves), **O ≈ 120 tokens** en promedio.
-- **Volumen hipotético:** este contrato usado como servicio real de un equipo de IT chico, en horario de oficina (~9 h/día hábil, 22 días hábiles/mes). Tres escenarios: Bajo (50 pedidos/día), Medio (200/día), Alto (1000/día).
+## Costo real medido, corrida por corrida
 
-## Costo por request
-
-| | Sin cache | Con cache (lectura, prefijo ya caliente) | Con cache (primera del día, TTL 5 min) |
-|---|---:|---:|---:|
-| Input fijo (F) | $0.00230 | $0.00023 | $0.00288 (write) |
-| Input variable (V) | $0.00010 | $0.00010 | $0.00010 |
-| Output (O) | $0.00120 | $0.00120 | $0.00120 |
-| **Total** | **$0.00360** | **$0.00153** | **$0.00418** |
-
-Una request que lee un prefijo ya cacheado cuesta ~57% menos que sin cache. La primera request que **escribe** el cache cuesta ~16% *más* que sin cache — cachear solo paga si después hay lecturas suficientes.
-
-## Matriz de sensibilidad: costo mensual con vs. sin Prompt Caching
-
-Tráfico distribuido en ~9h/día hábil ⇒ separación promedio entre requests: Bajo ≈ 11 min, Medio ≈ 2.7 min, Alto ≈ 32 seg.
-
-| Volumen | Requests/día | Sin cache (mensual) | Con cache, TTL correcta (mensual) | Ahorro |
+| Corrida | Input | Output (con thinking) | Latencia | Costo estimado |
 |---|---:|---:|---:|---:|
-| Bajo | 50 | $3.96 | $1.78 (TTL 1h) | ~55% |
-| Medio | 200 | $15.84 | $6.79 (TTL 5min) | ~57% |
-| Alto | 1000 | $79.20 | $33.72 (TTL 5min) | ~57% |
+| Incidente (facturación, ambigüedad qa/prod) | 4595 | 453 | 4.59s | $0.0069 + $0.0041 = **$0.0110** |
+| Acceso (pagos, ambigüedad prod/qa) | 3014 | 435 | 4.97s | $0.0045 + $0.0039 = **$0.0084** |
 
-**El hallazgo que importa está en "Bajo": la TTL correcta no es la misma en todos los escenarios.** Con separación promedio de 11 minutos entre pedidos, la TTL de 5 minutos expira *antes* de que llegue el siguiente request — cada uno paga el premium de escritura (1.25×) y nunca llega a leer, lo que da un costo mensual de **$4.59, peor que no cachear en absoluto** ($3.96). Cambiando a TTL de 1 hora (2× en la escritura, pero el prefijo sigue vivo entre pedidos de 11 min) el costo baja a los $1.78 de la tabla — la misma regla que documenta la referencia de pricing: *bajo tráfico disperso con huecos de 5-60 minutos, la TTL de 1 hora es la única ventana donde el 2× se paga solo*. En Medio y Alto, con huecos muy por debajo de 5 minutos, la TTL de 5 minutos ya es la más barata y subir a 1h solo pagaría un premium innecesario.
+(Costo = input×$1.50/MTok + output×$9.00/MTok. Solo hay 2 corridas automatizadas reales — la cuota gratuita de Gemini se agotó antes de poder generar las de "Despliegue" y mensaje vacío; ver el hallazgo #2 más abajo y `corridas/README.md`.)
+
+**Un ticket real cuesta ~$0.008–0.011**, no los ~$0.001–0.002 que hubiera sugerido una estimación que ignorara el thinking. Es la diferencia entre un supuesto razonable y una medición real — exactamente el tipo de error que este ejercicio buscaba encontrar.
+
+## Guard aplicado: `thinking_budget`
+
+Con `max_output_tokens=1024` y sin límite de thinking, una corrida real (`corrida-manual-4`, la de "Despliegue") devolvió un JSON truncado (`JSONDecodeError: Unterminated string`) porque el thinking consumió casi todo el presupuesto de tokens, sin dejar espacio para el ticket. Se corrigió fijando `thinking_config.thinking_budget=512` y subiendo `max_output_tokens=1536` — un guard de tokens real, encontrado por una falla real, no una precaución teórica (ver `DECISIONES.md`, Iteración 7).
+
+## Hallazgo real #2: rate limit del free tier (429 real)
+
+Al generar las corridas de esta entrega, el runner recibió un `429 RESOURCE_EXHAUSTED` real de Gemini: *"Quota exceeded... limit: 20, model: gemini-3.5-flash... Please retry in ~45s"*. Es el límite del tier gratuito (no un pico de tráfico simulado). El reintento con backoff de `tenacity` hizo exactamente lo esperado: reintentó, agotó los 5 intentos dentro de la ventana de backoff (`wait_random_exponential(max=30)`), y terminó devolviendo el error al usuario en vez de colgarse indefinidamente — visible como una excepción clara en la terminal, no un cuelgue silencioso. Esperando ~45-60 segundos reales (la ventana de la cuota), el siguiente intento funcionó.
+
+**Esto confirma en la práctica lo que la sección de SLO de más abajo predecía en teoría:** el backoff exponencial absorbe *ráfagas cortas*, pero no puede resolver una cuota realmente agotada — ahí la única mitigación real es tiempo de espera o un tier pago con más cupo, no más reintentos.
 
 ## Picos de carga y SLO
 
 **SLO objetivo declarado:** p95 de latencia de una respuesta del agente < 8 segundos.
 
-`runner.py` reintenta con `tenacity` ante `RateLimitError` (429) e `InternalServerError` (5xx/529): `stop_after_attempt(5)`, espera exponencial con jitter (`wait_random_exponential(multiplier=1, max=30)`). Eso protege la *disponibilidad* (la corrida eventualmente termina en vez de fallar en el primer 429), pero no protege el SLO de latencia: en el peor caso, varios reintentos cerca del tope de 30 segundos pueden acumular más de un minuto de espera antes de una respuesta exitosa — muy por encima de los 8 segundos objetivo.
+Las latencias reales medidas (4.59s, 4.97s) están dentro del SLO en el camino feliz. El problema es el camino con rate limit: un 429 real forzó una espera de ~45-60 segundos antes de poder reintentar con éxito — muy por encima del SLO. El costo financiero de un pico no está en tokens (un 429 rechazado no factura `input_tokens`/`output_tokens`), sino en la degradación de latencia/UX durante la espera, y en el costo fijo de evitarlo: pasar del free tier a un plan pago con más RPM/RPD antes de tener usuarios reales esperando una respuesta.
 
-**Impacto financiero de un pico:** un 429 rechazado no consume tokens (no hay `input_tokens`/`output_tokens` que facturar en una respuesta de error), así que un pico de carga no dispara un costo variable directo. El costo real de un pico está en dos lugares: (1) la degradación de latencia/UX mientras el backoff absorbe el exceso de tráfico, y (2) el costo fijo de mitigarlo *antes* de que ocurra — pedir un tier de rate limit más alto a Anthropic, o agregar una cola/throttle del lado del cliente para no depender solo de reintentos. Reintentar más agresivamente (subir `stop_after_attempt`) no es gratis: cada intento adicional sigue sin costar tokens, pero sí sigue empujando la latencia p95 en la dirección equivocada — la mitigación correcta ante un pico sostenido es capacidad (tier de rate limit), no más reintentos.
+## Supuesto de volumen (para proyectar más allá de estas 4 corridas)
+
+Con el free tier limitado a 20 requests/día para este modelo, cualquier volumen de producción real (aunque sea "bajo", como los 50/día que se habían estimado en la versión anterior de este documento) excede la cuota gratuita el primer día. La conclusión económica más importante de esta iteración no es una tabla de sensibilidad hipotética — es que **el free tier no alcanza ni para una demo con corridas reales de las 4 categorías del contrato**, y pasar a un plan pago es un prerrequisito, no una optimización.

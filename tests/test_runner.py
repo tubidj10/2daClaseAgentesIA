@@ -1,6 +1,6 @@
 """Tests de las partes de runner.py que no requieren llamar a la API.
 
-Corren sin ANTHROPIC_API_KEY: validan la herramienta de inventario (incluida
+Corren sin GEMINI_API_KEY: validan la herramienta de inventario (incluida
 la ambigüedad real qa/prod de la Entrega 3) y el schema de salida.
 """
 import sys
