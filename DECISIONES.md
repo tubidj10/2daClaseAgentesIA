@@ -70,7 +70,7 @@ Historial de las fallas reales encontradas al probar el contrato, el cambio apli
   5. **Rate limit real:** al generar las corridas, el runner recibió un `429 RESOURCE_EXHAUSTED` genuino de Gemini (cuota free-tier de 20 requests/día para este modelo). El retry con backoff de `tenacity` reintentó como estaba diseñado y devolvió el error de forma clara al agotar los intentos — comportamiento correcto ante una cuota realmente agotada, no un fallo del código. Ver `COSTOS.md`.
 - **Resultado:** 2 corridas automatizadas reales en `corridas/` (Incidente y Acceso, ambas con ambigüedad real qa/prod detectada por la herramienta) con tokens y latencia genuinos. Las corridas de Despliegue y mensaje vacío quedaron pendientes por la cuota agotada — no se fabricó un resultado para completarlas (ver `corridas/README.md`).
 - **COSTOS.md** se recalculó con precios de Gemini (no verificados contra la fuente oficial de Google, bloqueada en este entorno de red — declarado explícitamente) y con los costos reales medidos de las 2 corridas.
-- **Commit:** ver el commit que agrega este párrafo junto con el `runner.py` migrado a Gemini (`git log --oneline -- runner.py | head -1`).
+- **Commit:** [`1d3d5c1c5d0a86a745f2d76c33f45c0191d65593`](https://github.com/tubidj10/2daClaseAgentesIA/commit/1d3d5c1c5d0a86a745f2d76c33f45c0191d65593).
 
 ## Nota sobre métricas diferenciales (tokens/latencia)
 
