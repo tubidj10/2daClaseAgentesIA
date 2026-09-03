@@ -12,7 +12,12 @@ from pydantic import ValidationError
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from google.genai import errors as genai_errors  # noqa: E402
 
-from runner import TicketSchema, _retry_delay_del_servidor, buscar_en_inventario  # noqa: E402
+from runner import (  # noqa: E402
+    TicketSchema,
+    _parsear_ticket,
+    _retry_delay_del_servidor,
+    buscar_en_inventario,
+)
 
 
 def test_inventario_coincidencia_unica():
@@ -108,3 +113,21 @@ def test_retry_delay_none_si_no_hay_retry_info():
 
 def test_retry_delay_none_para_excepciones_no_apierror():
     assert _retry_delay_del_servidor(ValueError("no es un error de la API")) is None
+
+
+def test_parsear_ticket_json_valido():
+    texto = (
+        '{"tipo_solicitud": "Incidente", "entorno": "qa", '
+        '"titulo_ticket": "Revisión - Facturación", "datos_faltantes": []}'
+    )
+    ticket = _parsear_ticket(texto)
+    assert ticket.tipo_solicitud == "Incidente"
+    assert ticket.entorno == "qa"
+
+
+def test_parsear_ticket_json_truncado_da_error_descriptivo():
+    # Reproduce el caso real (Iteración 7): el modelo se queda sin tokens a
+    # mitad del string y el JSON queda sin cerrar.
+    texto_truncado = '{"tipo_solicitud": "Despliegue", "entorno": "Desconocido", "titulo_tick'
+    with pytest.raises(RuntimeError, match="JSON inválido o truncado"):
+        _parsear_ticket(texto_truncado)

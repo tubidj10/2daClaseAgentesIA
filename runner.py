@@ -50,6 +50,27 @@ class TicketSchema(BaseModel):
     datos_faltantes: list[str]
 
 
+def _parsear_ticket(texto: str) -> TicketSchema:
+    """Valida el texto final del modelo contra TicketSchema.
+
+    El schema no se fuerza a nivel de protocolo (function calling +
+    response_json_schema no está confirmado como compatible en Gemini), así
+    que esta validación es la única línea de defensa a nivel de código sobre
+    el output final. `json.loads` va envuelto explícitamente: con
+    THINKING_BUDGET mal calibrado, una corrida real devolvió un JSON
+    truncado (ver DECISIONES.md, Iteración 7) y el traceback crudo de
+    json.loads no decía dónde mirar.
+    """
+    try:
+        payload = json.loads(texto)
+    except json.JSONDecodeError as e:
+        raise RuntimeError(
+            f"El modelo devolvió un JSON inválido o truncado (revisar THINKING_BUDGET/MAX_OUTPUT_TOKENS "
+            f"en runner.py). Texto crudo recibido: {texto!r}"
+        ) from e
+    return TicketSchema.model_validate(payload)
+
+
 BUSCAR_EN_INVENTARIO_DECLARATION = types.FunctionDeclaration(
     name="buscar_en_inventario",
     description=(
@@ -174,11 +195,7 @@ def ejecutar(mensaje_usuario: str) -> dict:
         raise RuntimeError(f"Se alcanzó el límite de {MAX_ITERATIONS} iteraciones sin respuesta final.")
 
     latencia = time.monotonic() - inicio
-    # Ver la nota de diseño arriba: el schema no se fuerza a nivel de protocolo
-    # (function calling + response_json_schema no está confirmado como
-    # compatible en Gemini), así que esta validación con Pydantic es la única
-    # línea de defensa a nivel de código sobre el output final.
-    ticket = TicketSchema.model_validate(json.loads(texto))
+    ticket = _parsear_ticket(texto)
 
     return {
         "timestamp": datetime.now(timezone.utc).isoformat(),

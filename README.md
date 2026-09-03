@@ -41,6 +41,20 @@ Para correr los tests (no requieren API key):
 pytest
 ```
 
+## Costo por corrida (resumen — detalle completo en `COSTOS.md`)
+
+**Fórmula:** `costo = tokens_input × $1.50/1M + tokens_output × $9.00/1M` (Gemini 3.5 Flash; `tokens_output` incluye los "thinking tokens", que se facturan como output aunque la API los reporta aparte — ver `COSTOS.md`, hallazgo #1).
+
+**Rango real medido**, sobre las 3 corridas automatizadas en `corridas/` (no una estimación — son las 3 corridas reales que existen hoy en el repo):
+
+| | Tokens in | Tokens out | Costo |
+|---|---:|---:|---:|
+| Mínimo (Acceso) | 3.014 | 435 | **$0.0084** |
+| Máximo (Incidente) | 4.595 | 453 | **$0.0110** |
+| Promedio (3 corridas) | — | — | **$0.0098** |
+
+Proyectado al volumen declarado en `COSTOS.md` (30 solicitudes/día hábil): **≈ $1.47/semana, ≈ $76.44/año**. Fórmula desagregada, elección de modelo justificada contra una alternativa más barata, y el detalle corrida por corrida están en `COSTOS.md`.
+
 ## El contrato, en una línea
 
 Un system prompt fijo (rol + restricciones + formato) separado de un user prompt variable (contexto + tarea + ejemplos), con una herramienta de solo lectura en el medio: el agente nunca inventa un entorno, cluster o pod — si el inventario no lo confirma, lo marca como faltante. El detalle de por qué cada pieza quedó así, y qué se rompió antes de llegar a esta versión, está en `DECISIONES.md`.
